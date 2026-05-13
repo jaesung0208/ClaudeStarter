@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# pre-commit — 스택 무관 커밋 전 검증
+# project-spec.conf의 BACKEND_LINT_CMD / FRONTEND_LINT_CMD를 읽어 실행한다.
+#
+# 설치: SETUP.sh 실행 시 자동 (`git config --local core.hooksPath scripts/hooks`)
+
+set -uo pipefail
+
+FAIL=0
+
+echo "🔍 [pre-commit] Harness Hook Compliance 검사 시작..."
+
+# ── project-spec.conf 로드 ─────────────────────────────────────────
+SPEC_FILE=".claude/project-spec.conf"
+if [ -f "$SPEC_FILE" ]; then
+  # shellcheck disable=SC1090
+  source "$SPEC_FILE" 2>/dev/null || true
+else
+  echo "  ⚠️  .claude/project-spec.conf 없음 — SETUP.sh 실행을 권장합니다."
+fi
+
+# ── Staged 파일 추출 ───────────────────────────────────────────────
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null || true)
+[ -z "$STAGED_FILES" ] && { echo "  ℹ️  staged 파일 없음"; exit 0; }
+
+# ── 백엔드 lint 실행 (스택별) ──────────────────────────────────────
+BE_FILES=""
+case "${BACKEND_STACK:-none}" in
+  python-*)
+    BE_FILES=$(echo "$STAGED_FILES" | grep -E '\.py$' || true)
+    [ -n "$BE_FILES" ] && {
+      echo ""
+      echo "  🐍 Python 검사 ($BACKEND_STACK)..."
+      # syntax
+      while IFS= read -r f; do
+        [ -f "$f" ] || continue
+        if ! python3 -m py_compile "$f" 2>/tmp/_pyerr; then
+          echo "  ❌ syntax 오류: $f"; cat /tmp/_pyerr | sed 's/^/     /'; FAIL=1
+        fi
+      done <<< "$BE_FILES"
+      # ruff
+      if command -v ruff &>/dev/null && [ -n "${BACKEND_LINT_CMD:-}" ]; then
+        if ! echo "$BE_FILES" | xargs ruff check 2>/tmp/_ruff; then
+          echo "  ❌ ruff 오류"; cat /tmp/_ruff | sed 's/^/     /'; FAIL=1
+        else
+          echo "  ✅ ruff 통과"
+        fi
+      fi
+    }
+    ;;
+  typescript-*)
+    BE_FILES=$(echo "$STAGED_FILES" | grep -E "^${BACKEND_DIR:-.}/.*\.(ts|tsx|js)$" || true)
+    [ -n "$BE_FILES" ] && [ -n "${BACKEND_LINT_CMD:-}" ] && {
+      echo ""
+      echo "  🟦 TypeScript 검사 ($BACKEND_STACK)..."
+      if [ -d "$BACKEND_DIR" ]; then
+        (cd "$BACKEND_DIR" && eval "$BACKEND_LINT_CMD" 2>/tmp/_lint) || {
+          echo "  ❌ lint 오류"; tail -20 /tmp/_lint | sed 's/^/     /'; FAIL=1
+        }
+        [ $FAIL -eq 0 ] && echo "  ✅ lint 통과"
+      fi
+    }
+    ;;
+  java-spring)
+    BE_FILES=$(echo "$STAGED_FILES" | grep -E '\.java$' || true)
+    [ -n "$BE_FILES" ] && [ -n "${BACKEND_LINT_CMD:-}" ] && {
+      echo ""
+      echo "  ☕ Java 검사 ($BACKEND_STACK)..."
+      eval "$BACKEND_LINT_CMD" 2>/tmp/_lint || {
+        echo "  ❌ lint 오류"; tail -20 /tmp/_lint | sed 's/^/     /'; FAIL=1
+      }
+      [ $FAIL -eq 0 ] && echo "  ✅ Spotless 통과"
+    }
+    ;;
+  dotnet-aspnet)
+    BE_FILES=$(echo "$STAGED_FILES" | grep -E '\.cs$' || true)
+    [ -n "$BE_FILES" ] && [ -n "${BACKEND_LINT_CMD:-}" ] && {
+      echo ""
+      echo "  🟪 .NET 검사 ($BACKEND_STACK)..."
+      eval "$BACKEND_LINT_CMD" 2>/tmp/_lint || {
+        echo "  ❌ lint 오류"; tail -20 /tmp/_lint | sed 's/^/     /'; FAIL=1
+      }
+      [ $FAIL -eq 0 ] && echo "  ✅ dotnet format 통과"
+    }
+    ;;
+esac
+
+# ── 프론트엔드 lint 실행 (스택별) ──────────────────────────────────
+FE_FILES=""
+case "${FRONTEND_STACK:-none}" in
+  react-vite|vue|nextjs)
+    if [ -n "${FRONTEND_DIR:-}" ] && [ -d "$FRONTEND_DIR" ]; then
+      FE_FILES=$(echo "$STAGED_FILES" | grep -E "^${FRONTEND_DIR}/.*\.(ts|tsx|js|jsx|vue)$" || true)
+      [ -n "$FE_FILES" ] && [ -n "${FRONTEND_LINT_CMD:-}" ] && {
+        echo ""
+        echo "  🎨 프론트엔드 lint ($FRONTEND_STACK)..."
+        (cd "$FRONTEND_DIR" && eval "$FRONTEND_LINT_CMD" 2>/tmp/_felint) || {
+          echo "  ❌ lint 오류"; tail -20 /tmp/_felint | sed 's/^/     /'; FAIL=1
+        }
+        [ $FAIL -eq 0 ] && echo "  ✅ lint 통과"
+      }
+    fi
+    ;;
+esac
+
+# ── 시크릿 패턴 검사 (스택 무관) ───────────────────────────────────
+SECRET_MATCH=$(git diff --cached -- '*.py' '*.ts' '*.tsx' '*.js' '*.java' '*.cs' '*.go' 2>/dev/null | \
+  grep -E '^\+.*(password|passwd|secret|api_key|apikey|token|private_key)\s*=\s*["'"'"'][^${\s]{6,}["'"'"']' | \
+  grep -v '\.example' | head -3 || true)
+
+[ -n "$SECRET_MATCH" ] && {
+  echo ""
+  echo "  ⚠️  [경고] 시크릿 패턴 감지 (차단하지 않음):"
+  echo "$SECRET_MATCH" | sed 's/^/     /'
+  echo "  → 실제 시크릿이라면 환경변수로 교체하세요."
+}
+
+# ── 결과 ───────────────────────────────────────────────────────────
+echo ""
+if [ $FAIL -eq 0 ]; then
+  echo "✅ [pre-commit] 검사 통과 — 커밋 진행"
+else
+  echo "🚫 [pre-commit] 오류 발견 — 커밋 차단"
+  echo "   --no-verify 우회는 Harness 원칙 위반입니다."
+fi
+exit $FAIL

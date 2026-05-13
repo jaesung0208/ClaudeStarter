@@ -1,0 +1,105 @@
+# CI Pipeline — 스택 무관 (project-spec.conf 기반)
+#
+# 이 워크플로우는 SETUP.sh가 생성한 .claude/project-spec.conf의
+# BACKEND_LINT_CMD / BACKEND_TEST_CMD / FRONTEND_LINT_CMD / FRONTEND_TEST_CMD 등을 읽어 실행합니다.
+#
+# CI_TOOL이 github-actions가 아닌 경우 이 파일은 무시되며,
+# 대신 .gitlab-ci.yml 또는 azure-pipelines.yml을 사용하세요.
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: project-spec.conf 로드 확인
+        run: |
+          if [ ! -f .claude/project-spec.conf ]; then
+            echo "::error::.claude/project-spec.conf 없음 — SETUP.sh를 먼저 실행하세요."
+            exit 1
+          fi
+          source .claude/project-spec.conf
+          echo "BACKEND_STACK=$BACKEND_STACK"
+          echo "FRONTEND_STACK=$FRONTEND_STACK"
+          echo "DB_TYPE=$DB_TYPE"
+
+      # ── 백엔드 환경 설정 (스택별 분기) ──
+      - name: Setup Python (Python 백엔드)
+        if: contains('python-fastapi python-django python-flask', fromJSON('"' + env.BACKEND_STACK + '"'))
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Node.js (TypeScript 백엔드 또는 프론트엔드)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java (Java 백엔드)
+        if: env.BACKEND_STACK == 'java-spring'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup .NET (.NET 백엔드)
+        if: env.BACKEND_STACK == 'dotnet-aspnet'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0'
+
+      # ── 의존성 설치 및 Lint ──
+      - name: Install dependencies & Lint (backend)
+        run: |
+          source .claude/project-spec.conf
+          case "$BACKEND_STACK" in
+            python-*)
+              pip install -r requirements.txt 2>/dev/null || true
+              pip install ruff
+              eval "$BACKEND_LINT_CMD"
+              ;;
+            typescript-*)
+              [ -n "$BACKEND_DIR" ] && cd "$BACKEND_DIR"
+              npm install -g pnpm && pnpm install
+              eval "$BACKEND_LINT_CMD"
+              ;;
+            java-spring)
+              eval "$BACKEND_LINT_CMD"
+              ;;
+            dotnet-aspnet)
+              dotnet restore && eval "$BACKEND_LINT_CMD"
+              ;;
+          esac
+
+      - name: Test (backend)
+        run: |
+          source .claude/project-spec.conf
+          [ -z "$BACKEND_TEST_CMD" ] && exit 0
+          case "$BACKEND_STACK" in
+            typescript-*)
+              [ -n "$BACKEND_DIR" ] && cd "$BACKEND_DIR"
+              ;;
+          esac
+          eval "$BACKEND_TEST_CMD"
+
+      - name: Install & Test (frontend)
+        run: |
+          source .claude/project-spec.conf
+          [ "$FRONTEND_STACK" = "none" ] && exit 0
+          [ -z "$FRONTEND_DIR" ] && exit 0
+          cd "$FRONTEND_DIR"
+          npm install -g pnpm && pnpm install
+          [ -n "$FRONTEND_LINT_CMD" ] && eval "$FRONTEND_LINT_CMD" || true
+          [ -n "$FRONTEND_TEST_CMD" ] && eval "$FRONTEND_TEST_CMD" || true
+
+    env:
+      BACKEND_STACK: ${{ vars.BACKEND_STACK }}
+      FRONTEND_STACK: ${{ vars.FRONTEND_STACK }}

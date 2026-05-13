@@ -1,0 +1,49 @@
+# ClaudeStarter Project Specification
+# 이 파일은 SETUP.sh가 자동 생성하며, hooks/agents/CLAUDE.md가 이 값을 읽어 동작합니다.
+# 수동 편집 시 SETUP.sh의 다음 실행에서 덮어쓰일 수 있습니다.
+
+# ── 프로젝트 메타 ──────────────────────────────────────────────────
+PROJECT_NAME=""
+PROJECT_DESCRIPTION=""
+PROJECT_TYPE="new"               # new | existing
+GITHUB_ORG=""
+GITHUB_REPO=""
+SPEC_VERSION="1.0"
+GENERATED_AT=""
+
+# ── 백엔드 ─────────────────────────────────────────────────────────
+# 가능 값: python-fastapi | python-django | python-flask
+#          typescript-nestjs | typescript-express
+#          java-spring | dotnet-aspnet | none
+BACKEND_STACK="none"
+BACKEND_DIR=""                   # 예: app/backend, src/main/java, src
+BACKEND_TEST_CMD=""              # 예: pytest, pnpm test, ./gradlew test, dotnet test
+BACKEND_LINT_CMD=""              # 예: ruff check ., pnpm lint, ./gradlew spotlessCheck
+BACKEND_BUILD_CMD=""             # 빌드가 필요한 경우만 (예: pnpm build, mvn package)
+BACKEND_RUN_CMD=""               # 로컬 실행 명령
+
+# ── 프론트엔드 ─────────────────────────────────────────────────────
+# 가능 값: react-vite | vue | nextjs | none
+FRONTEND_STACK="none"
+FRONTEND_DIR=""                  # 예: app/frontend, web, client
+FRONTEND_TEST_CMD=""             # 예: pnpm test
+FRONTEND_LINT_CMD=""             # 예: pnpm lint
+FRONTEND_BUILD_CMD=""            # 예: pnpm build
+
+# ── 데이터베이스 ───────────────────────────────────────────────────
+# 가능 값: postgres | mssql | snowflake | mysql | sqlite | none
+DB_TYPE="none"
+DB_MIGRATION_TOOL=""             # 예: alembic, prisma, flyway, dbt
+
+# ── 인프라 ─────────────────────────────────────────────────────────
+CONTAINER_RUNTIME="none"         # docker | podman | none
+CLOUD_PROVIDER="none"            # aws | azure | self-hosted | none
+CI_TOOL="github-actions"         # github-actions | gitlab-ci | azure-devops | none
+
+# ── 보안 정책 ──────────────────────────────────────────────────────
+SECURITY_LEVEL="1"               # 1 (표준) | 2 (강화 — DDL 차단 + 민감정보 스캔 강화)
+
+# ── 권장 도구 (스택 선택 시 자동 채움) ────────────────────────────
+RECOMMENDED_LINTER=""
+RECOMMENDED_FORMATTER=""
+RECOMMENDED_ORM=""

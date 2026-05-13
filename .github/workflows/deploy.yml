@@ -1,0 +1,72 @@
+# Deploy Pipeline — CLOUD_PROVIDER 기반 (project-spec.conf 참조)
+#
+# 클라우드별 시크릿:
+# - aws (Lightsail): LIGHTSAIL_HOST, LIGHTSAIL_USER, LIGHTSAIL_SSH_KEY
+# - aws (ECS):       AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
+# - azure:           AZURE_CREDENTIALS, AZURE_WEBAPP_NAME
+# - self-hosted:     SSH_HOST, SSH_USER, SSH_KEY
+#
+# 이 파일은 템플릿입니다. CLOUD_PROVIDER에 맞게 deploy 스텝을 수정하세요.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load project-spec
+        run: |
+          source .claude/project-spec.conf
+          echo "CLOUD_PROVIDER=$CLOUD_PROVIDER" >> $GITHUB_ENV
+          echo "CONTAINER_RUNTIME=$CONTAINER_RUNTIME" >> $GITHUB_ENV
+
+      # ── AWS Lightsail 배포 (CLOUD_PROVIDER=aws + Lightsail 사용) ──
+      - name: Deploy to AWS Lightsail
+        if: env.CLOUD_PROVIDER == 'aws'
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USER }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          script: |
+            cd /home/${{ secrets.LIGHTSAIL_USER }}/app
+            git pull origin main
+            docker compose pull && docker compose up -d --build
+
+      # ── Azure 배포 (CLOUD_PROVIDER=azure) ──
+      - name: Azure Login
+        if: env.CLOUD_PROVIDER == 'azure'
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure App Service
+        if: env.CLOUD_PROVIDER == 'azure'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+
+      # ── Self-hosted (SSH) ──
+      - name: Deploy to self-hosted server
+        if: env.CLOUD_PROVIDER == 'self-hosted'
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd ~/app
+            git pull origin main
+            # 컨테이너 사용 시
+            if [ "$CONTAINER_RUNTIME" = "docker" ]; then
+              docker compose pull && docker compose up -d --build
+            fi
+            # 컨테이너 미사용 시 — 프로젝트별 배포 스크립트 작성 필요
