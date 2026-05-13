@@ -216,6 +216,31 @@ develop → main 프로덕션 배포 + 배포 후 검증
 
 ---
 
+## Credits — 원본 템플릿
+
+이 템플릿은 다음 저장소의 ClaudeStarter를 기반으로 **스택 무관 범용 템플릿**으로 확장한 버전입니다:
+
+- **원본 저장소**: https://github.com/mailtome7072/ClaudeStarter.git
+- **원본 특징**: Python + React + Docker + PostgreSQL 고정 스택 기반의 하네스 엔지니어링 템플릿
+
+### 본 버전의 주요 확장
+
+| 영역 | 원본 | 본 버전 |
+|---|---|---|
+| 백엔드 스택 | Python (FastAPI 고정) | Python (FastAPI/Django/Flask) / TypeScript (NestJS/Express) / Java (Spring Boot) / **.NET (ASP.NET Core + Framework Legacy)** |
+| 프론트엔드 | React 고정 | React / Vue / Next.js |
+| 데이터베이스 | PostgreSQL 고정 | PostgreSQL / MS SQL / **Snowflake** / MySQL / SQLite |
+| 컨테이너 | Docker 고정 | Docker / Podman / 사용 안 함 |
+| 클라우드 | AWS Lightsail 가정 | AWS / Azure / Self-hosted |
+| CI/CD | GitHub Actions 가정 | GitHub Actions / GitLab CI / Azure DevOps |
+| 초기화 | 고정 스택용 SETUP | **신규/기존 분기 + 3가지 Spec 모드 (직접/유형/PRD 기반)** |
+| 자동 감지 | 없음 | `scripts/detect-stack.sh` — pom.xml/csproj/@nestjs/requirements.txt 등으로 스택 자동 감지 |
+| 추가 에이전트 | — | `spec-recommender` (Opus) — PRD 기반 권장 Spec 추천 |
+| 추가 룰 | — | 글로벌 `code-style.md` + 스택별 10개 룰 분리 |
+| 행동 원칙 | 분산 | CLAUDE.md "0. Claude Code 필수 행동 원칙" 통합 + **응답 마지막 자가 체크포인트 14개** 강제 |
+
+---
+
 ## 라이선스
 
 (프로젝트 라이선스를 여기에 명시하세요)
