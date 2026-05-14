@@ -33,7 +33,7 @@ jobs:
 
       # ── 백엔드 환경 설정 (스택별 분기) ──
       - name: Setup Python (Python 백엔드)
-        if: contains('python-fastapi python-django python-flask', fromJSON('"' + env.BACKEND_STACK + '"'))
+        if: env.BACKEND_STACK == 'python-fastapi' || env.BACKEND_STACK == 'python-django' || env.BACKEND_STACK == 'python-flask'
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
